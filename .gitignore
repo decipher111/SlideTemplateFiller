@@ -18,6 +18,13 @@ packages/
 .DS_Store
 Thumbs.db
 
+# Claude Code
+.claude/
+
+# Scratch files
+backup.txt
+try1.txt
+
 # Output files (generated results)
 Result.pptx
 Result.png
