@@ -6,7 +6,6 @@
 // using System.Text.Json;
 // using DocumentFormat.OpenXml.Packaging;
 // using DocumentFormat.OpenXml.Presentation;
-// using DocumentFormat.OpenXml;
 // using A = DocumentFormat.OpenXml.Drawing;
 // using P = DocumentFormat.OpenXml.Presentation;
 // using SpirePresentation = Spire.Presentation;
@@ -14,7 +13,6 @@
 // using System.Net.Http;
 // using System.Net.Http.Headers;
 // using System.Text;
-// using System.Text.Json;
 
 
 // namespace SlideTemplateFiller
@@ -39,9 +37,7 @@
 
 //       try
 //       {
-//         // Process presentation in-place
 //         var result = SlideProcessor.ProcessPresentation(inputPath);
-
 
 //         // Serialize with indentation for console output
 //         var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
@@ -84,7 +80,6 @@
 // - If content remains after filling all shapes, set fallback.action to ""create_slide"" and produce mappings for a second slide (repeat shapes with new IDs like sX_cont).
 // - Keep each mapping text concise and human-readable.";
 
-
 //         string pngPath = Path.ChangeExtension(inputPath, ".png");
 //         if (File.Exists(pngPath))
 //         {
@@ -96,9 +91,6 @@
 //           Console.WriteLine("PNG preview not present — skipping OpenAI call.");
 //         }
 
-//         // Optional: also save to file (uncomment if you want a sidecar JSON file)
-//         // File.WriteAllText(Path.ChangeExtension(inputPath, ".shapes.json"), finalResponse);
-
 //         return 0;
 //       }
 //       catch (Exception ex)
@@ -108,15 +100,11 @@
 //       }
 //     }
 
-
 //   }
 
 //   static class SlideProcessor
 //   {
-//     /// <summary>
-//     /// Orchestrates opening the presentation, exporting preview PNG, extracting shapes from the first slide,
-//     /// and returning an ExtractionResult. Keeps reading-only access to the package.
-//     /// </summary>
+//     /// Orchestrates opening the presentation, exporting preview PNG, extracting shapes from the first slide,and returning an ExtractionResult.
 //     public static ExtractionResult ProcessPresentation(string inputPptxPath)
 //     {
 //       // Save preview PNG (non-fatal)
@@ -135,8 +123,6 @@
 
 //       var metas = ExtractShapeMetasFromSlide(slidePart, shapes);
 
-//       Console.WriteLine(metas);
-
 //       return new ExtractionResult
 //       {
 //         ShapeCount = metas.Count,
@@ -144,10 +130,7 @@
 //       };
 //     }
 
-//     /// <summary>
 //     /// Extracts ShapeMeta objects from a slide. This is the extracted logic previously inside Main.
-//     /// Accepts the slide part and the list of shape elements to inspect.
-//     /// </summary>
 //     public static List<ShapeMeta> ExtractShapeMetasFromSlide(SlidePart slidePart, List<P.Shape> shapes)
 //     {
 //       var shapeMetas = new List<ShapeMeta>();
@@ -209,18 +192,13 @@
 //       return shapeMetas;
 //     }
 
-//     /// <summary>
 //     /// Returns the RunProperties for a Run, or null if none present.
-//     /// Kept as a helper to make intent clearer and to isolate any future parsing logic.
-//     /// </summary>
 //     private static A.RunProperties GetFirstRunProperties(A.Run? run)
 //     {
 //       return run?.RunProperties;
 //     }
 
-//     /// <summary>
 //     /// Save first slide as PNG (keeps your original Spire usage).
-//     /// </summary>
 //     public static void SaveFirstSlideAsPng(string pptxPath)
 //     {
 //       try
@@ -244,7 +222,7 @@
 
 //   }
 
-// public static class OpenAiHelper
+//   public static class OpenAiHelper
 // {
 //     public static async Task SendImageAndJsonToResponsesApiAsync(string imagePath, string shapesJson, string instruction, string newTextBlob)
 //     {
@@ -277,10 +255,10 @@
 //                     role = "user",
 //                     content = new object[]
 //                     {
-//                         new { type = "input_text", text = instruction ?? "Instruction missing" },
+//                         new { type = "input_text", text = instruction },
 //                         new { type = "input_image", image_url = dataUri },
 //                         new { type = "input_text", text = shapesJson },
-//                         new { type = "input_text", text = newTextBlob ?? "Content blob missing" }
+//                         new { type = "input_text", text = newTextBlob }
 //                     }
 //                 }
 //             },
@@ -296,7 +274,6 @@
 //         try
 //         {
 //             using var content = new StringContent(json, Encoding.UTF8, "application/json");
-
 //             using var resp = await client.PostAsync("https://api.openai.com/v1/responses", content);
 //             string respBody = await resp.Content.ReadAsStringAsync();
 
@@ -311,7 +288,6 @@
 //             {
 //                 using var doc = JsonDocument.Parse(respBody);
 //                 var root = doc.RootElement;
-//                 Console.WriteLine("Im here");
 
 //                 // Many Responses API outputs place text in `output` → array → each item has `content` array of objects;
 //                 // frequently an object of type "output_text" or with property "text" holds the string.
@@ -388,8 +364,6 @@
 //     public string Id { get; set; } = "";
 //     public string FullText { get; set; } = "";
 //     public double? ChosenFontSizePts { get; set; }
-
-//     // true when the first visible run of text in the shape is bold.
-//     public bool Bold { get; set; } = false;
+//      public bool Bold { get; set; } = false;
 //   }
 // }

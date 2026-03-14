@@ -1,395 +1,327 @@
+// Requires these NuGet packages:
+// - DocumentFormat.OpenXml (Open XML SDK)
+// This is a complete, copy-pasteable Program.cs. Put "Template Test.pptx" next to the exe
+// and run. It will create/overwrite "result.pptx" in the same folder.
+
 using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Text.Json;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
-using DocumentFormat.OpenXml;
 using A = DocumentFormat.OpenXml.Drawing;
-using P = DocumentFormat.OpenXml.Presentation;
-using SpirePresentation = Spire.Presentation;
-using System.Drawing;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
 
-
-namespace SlideTemplateFiller
+namespace SlideUpdater
 {
-  class Program
-  {
-    static async Task<int> Main(string[] args)
-    {
-      if (args.Length < 1)
-      {
-        Console.WriteLine("Usage: SlideTemplateFiller <input.pptx>");
-        return 1;
-      }
-
-      string inputPath = args[0];
-
-      if (!File.Exists(inputPath))
-      {
-        Console.WriteLine($"Input file not found: {inputPath}");
-        return 2;
-      }
-
-      try
-      {
-        // Process presentation in-place
-        var result = SlideProcessor.ProcessPresentation(inputPath);
-
-
-        // Serialize with indentation for console output
-        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-        string finalResponse = JsonSerializer.Serialize(result, jsonOptions);
-
-        Console.WriteLine(finalResponse);
-
-        string newTextBlob = "New Text - 1. Artificial Intelligence (AI) & Agentic AI AI is evolving from simple tools to autonomous systems that can plan, decide, and act with minimal human input. Agentic AI: AI systems that complete complex tasks independently (e.g., research, coding, scheduling). AI-native software development: AI helps write, debug, and optimize code. AI for science & medicine: Accelerates drug discovery and climate modeling. Why it matters: Automates knowledge work and boosts productivity. Drives innovation across industries such as healthcare, finance, and manufacturing. Experts note that AI adoption is accelerating across organizations and is becoming a foundational technology rather than optional infrastructure. 2. Quantum Computing Quantum computing uses quantum bits (qubits) to perform calculations that are impossible for classical computers. Key developments: Hybrid quantum–classical systems entering early industry use. Faster processing for AI training, cryptography, and molecular simulations. Governments and companies heavily investing in quantum research. Potential impact: Breakthroughs in drug discovery, material science, and optimization problems. Could eventually crack traditional encryption, prompting post-quantum cybersecurity efforts. Quantum technologies are moving from research labs toward real-world business applications in the mid-2020s. 3. Biotechnology & Genetic Engineering Biotech is rapidly advancing with tools that can modify and engineer living systems. Major areas: CRISPR gene editing and advanced DNA sequencing. Synthetic biology to create new medicines and bio-materials. AI-driven drug discovery and personalized medicine. Impact: Faster development of vaccines and treatments. Potential cures for genetic diseases. Personalized healthcare based on individual DNA. Biotech innovations in gene editing, AI-driven research, and personalized medicine are reshaping healthcare and life sciences.";
-        
-        string customInstruction = @"You are an assistant that maps a single long content blob into the existing slide's placeholders. You are given: 
-1) A thumbnail image of the slide (visual context). 
-2) A JSON list of shapes. Each shape contains: id, type, bbox, font info, existing_text, capacity_estimate_chars. 
-3) A ""new_content_blob"" — long text to distribute.
-
-Goal: assign the blob's content into the shapes so the resulting slide:
-- Respects visual prominence: put headline text into the largest title placeholders.
-- Does not exceed capacity_estimate_chars per shape (treat this as a hard target).
-- Keeps meaning: headline text should contain main claim; body text should keep list elements if present.
-
-Output: ONLY JSON with this schema:
-
+    class Program
+    {  
+        const string BODY_TEXT = @"1. Artificial Intelligence (AI) & Agentic AI AI is evolving from simple tools to autonomous systems that can plan, decide, and act with minimal human input. Agentic AI: AI systems that complete complex tasks independently (e.g., research, coding, scheduling). AI-native software development: AI helps write, debug, and optimize code. AI for science & medicine: Accelerates drug discovery and climate modeling. Why it matters: Automates knowledge work and boosts productivity. Drives innovation across industries such as healthcare, finance, and manufacturing. Experts note that AI adoption is accelerating across organizations and is becoming a foundational technology rather than optional infrastructure. 2. Quantum Computing Quantum computing uses quantum bits (qubits) to perform calculations that are impossible for classical computers. Key developments: Hybrid quantum–classical systems entering early industry use. Faster processing for AI training, cryptography, and molecular simulations. Governments and companies heavily investing in quantum research. Potential impact: Breakthroughs in drug discovery, material science, and optimization problems. Could eventually crack traditional encryption, prompting post-quantum cybersecurity efforts. Quantum technologies are moving from research labs toward real-world business applications in the mid-2020s. 3. Biotechnology & Genetic Engineering Biotech is rapidly advancing with tools that can modify and engineer living systems. Major areas: CRISPR gene editing and advanced DNA sequencing. Synthetic biology to create new medicines and bio-materials. AI-driven drug discovery and personalized medicine. Impact: Faster development of vaccines and treatments. Potential cures for genetic diseases. Personalized healthcare based on individual DNA. Biotech innovations in gene editing, AI-driven research, and personalized medicine are reshaping healthcare and life sciences.";
+        private static readonly string HardcodedJson = """
 {
-  ""mappings"": [
+  "mappings": [
     {
-      ""shape_id"": ""<id>"",
-      ""text"": ""<text to insert (plain text)>"",
-      ""style_suggestion"": {""font_size"": <int>, ""bold"": true/false},
-      ""reason"": ""<1-2 sentence justification>""
+      "shape_id": "2",
+      "text": "Emerging Technology Trends: AI, Quantum, and Biotech",
+      "style_suggestion": {"font_size": 28, "bold": true},
+      "reason": "Use the main title area to state the slide’s core claim covering all three trends."
+    },
+    {
+      "shape_id": "16",
+      "text": "Tech Landscape 2026",
+      "style_suggestion": {"font_size": 14, "bold": false},
+      "reason": "Secondary banner sets quick context; short to fit the small ribbon."
+    },
+    {
+      "shape_id": "101",
+      "text": "Artificial Intelligence & Agentic AI",
+      "style_suggestion": {"font_size": 14, "bold": true},
+      "reason": "Column 1 header should carry the first key trend."
+    },
+    {
+      "shape_id": "102",
+      "text": "• Agentic AI completes complex tasks (research, coding, scheduling)\n• AI‑native dev: write, debug, optimize code\n• AI for science/medicine: drug discovery, climate models",
+      "style_suggestion": {"font_size": 12, "bold": false},
+      "reason": "Concise bullets introduce definitions/examples for the AI trend."
+    },
+    {
+      "shape_id": "8",
+      "text": "AI is evolving from simple tools to autonomous systems that can plan, decide, and act with minimal human input. Why it matters: automates knowledge work, boosts productivity, and drives innovation across industries.",
+      "style_suggestion": {"font_size": 12, "bold": false},
+      "reason": "Replaces the ‘what is this pattern’ paragraph with a clear description and impact."
+    },
+    {
+      "shape_id": "10",
+      "text": "Key signals\n• Enterprise adoption accelerating; becoming foundational tech\n• Expanding use in healthcare, finance, and manufacturing",
+      "style_suggestion": {"font_size": 12, "bold": false},
+      "reason": "Keeps a short bulleted list of developments to fit the capacity."
+    },
+    {
+      "shape_id": "123",
+      "text": "Status: Mainstreaming fast",
+      "style_suggestion": {"font_size": 11, "bold": false},
+      "reason": "This small footer box succinctly states adoption status."
+    },
+    {
+      "shape_id": "179",
+      "text": "Quantum Computing",
+      "style_suggestion": {"font_size": 14, "bold": true},
+      "reason": "Column 2 header names the second trend."
+    },
+    {
+      "shape_id": "180",
+      "text": "• Hybrid quantum–classical systems entering early use\n• Faster processing for AI training, cryptography, molecular sims\n• Heavy government and corporate investment",
+      "style_suggestion": {"font_size": 12, "bold": false},
+      "reason": "Bulleted key developments fit this preface area."
+    },
+    {
+      "shape_id": "182",
+      "text": "What it is: Quantum computers use qubits to tackle problems intractable for classical machines.",
+      "style_suggestion": {"font_size": 12, "bold": false},
+      "reason": "Short definition aligns with the ‘what is’ paragraph slot."
+    },
+    {
+      "shape_id": "183",
+      "text": "Potential impact\n• Breakthroughs in drug discovery, materials, and optimization\n• Could crack current encryption; drives post‑quantum security\n• Moving from labs toward real‑world apps in the mid‑2020s",
+      "style_suggestion": {"font_size": 12, "bold": false},
+      "reason": "Concise list preserves the main implications."
+    },
+    {
+      "shape_id": "184",
+      "text": "Status: Early/partial enterprise use",
+      "style_suggestion": {"font_size": 11, "bold": false},
+      "reason": "Summarizes maturity in the small footer slot."
+    },
+    {
+      "shape_id": "190",
+      "text": "Biotechnology & Genetic Engineering",
+      "style_suggestion": {"font_size": 14, "bold": true},
+      "reason": "Column 3 header introduces the third trend."
+    },
+    {
+      "shape_id": "191",
+      "text": "• CRISPR editing and advanced DNA sequencing\n• Synthetic biology for new medicines and biomaterials\n• AI‑driven discovery and personalized medicine",
+      "style_suggestion": {"font_size": 12, "bold": false},
+      "reason": "Bulleted ‘major areas’ fits the existing list area."
+    },
+    {
+      "shape_id": "193",
+      "text": "Biotech is rapidly advancing with tools to modify and engineer living systems, enabling targeted therapies and new biological products.",
+      "style_suggestion": {"font_size": 12, "bold": false},
+      "reason": "Brief explanatory paragraph mirrors the prior ‘what is’ section."
+    },
+    {
+      "shape_id": "194",
+      "text": "Impact\n• Faster vaccines and treatments\n• Potential cures for genetic diseases\n• Personalized care based on individual DNA",
+      "style_suggestion": {"font_size": 12, "bold": false},
+      "reason": "Keeps the key impacts as a short, readable list."
+    },
+    {
+      "shape_id": "195",
+      "text": "Status: Rapid progress; strong clinical/regulatory focus",
+      "style_suggestion": {"font_size": 11, "bold": false},
+      "reason": "Uses the small footer to note maturity and constraints."
     }
   ],
-  ""fallback"": {
-    ""action"": ""none"" | ""create_slide"" | ""truncate"" | ""put_in_notes"",
-    ""explanation"": ""<why>""
+  "fallback": {
+    "action": "none",
+    "explanation": "All key content was semantically compressed to fit the existing three-column layout without exceeding typical text box capacities."
   }
 }
-
-Guidelines:
-- Try not to exceed capacity_estimate_chars. If content must be compressed, prefer semantic compression (shorten sentences, preserve keywords), not blind truncation.
-- If parts of the blob are lists, keep them as bullets (preserve up to capacity limit).
-- If content remains after filling all shapes, set fallback.action to ""create_slide"" and produce mappings for a second slide (repeat shapes with new IDs like sX_cont).
-- Keep each mapping text concise and human-readable.";
-
-
-        string pngPath = Path.ChangeExtension(inputPath, ".png");
-        if (File.Exists(pngPath))
+""";
+        static void Main(string[] args)
         {
-
-          await OpenAiHelper.SendImageAndJsonToResponsesApiAsync(pngPath, finalResponse, customInstruction, newTextBlob);
-        }
-        else
-        { 
-          Console.WriteLine("PNG preview not present — skipping OpenAI call.");
-        }
-
-        // Optional: also save to file (uncomment if you want a sidecar JSON file)
-        // File.WriteAllText(Path.ChangeExtension(inputPath, ".shapes.json"), finalResponse);
-
-        return 0;
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine($"Fatal error: {ex.Message}");
-        return 99;
-      }
-    }
-
-
-  }
-
-  static class SlideProcessor
-  {
-    /// <summary>
-    /// Orchestrates opening the presentation, exporting preview PNG, extracting shapes from the first slide,
-    /// and returning an ExtractionResult. Keeps reading-only access to the package.
-    /// </summary>
-    public static ExtractionResult ProcessPresentation(string inputPptxPath)
-    {
-      // Save preview PNG (non-fatal)
-      SaveFirstSlideAsPng(inputPptxPath);
-
-      using var doc = PresentationDocument.Open(inputPptxPath, false); // read-only
-      var presentationPart = doc.PresentationPart ?? throw new InvalidOperationException("No PresentationPart found.");
-
-      var slidePart = presentationPart.SlideParts.FirstOrDefault()
-                      ?? throw new InvalidOperationException("No slides found.");
-
-      var shapeTree = slidePart.Slide.CommonSlideData?.ShapeTree
-                      ?? throw new InvalidOperationException("No shape tree on slide.");
-
-      var shapes = shapeTree.Descendants<P.Shape>().ToList();
-
-      var metas = ExtractShapeMetasFromSlide(slidePart, shapes);
-
-      Console.WriteLine(metas);
-
-      return new ExtractionResult
-      {
-        ShapeCount = metas.Count,
-        Shapes = metas
-      };
-    }
-
-    /// <summary>
-    /// Extracts ShapeMeta objects from a slide. This is the extracted logic previously inside Main.
-    /// Accepts the slide part and the list of shape elements to inspect.
-    /// </summary>
-    public static List<ShapeMeta> ExtractShapeMetasFromSlide(SlidePart slidePart, List<P.Shape> shapes)
-    {
-      var shapeMetas = new List<ShapeMeta>();
-
-      foreach (var sp in shapes)
-      {
-        if (sp.TextBody == null) continue;
-
-        string fullText = sp.TextBody.InnerText ?? "";
-        if (string.IsNullOrWhiteSpace(fullText)) continue;
-
-        var nv = sp.NonVisualShapeProperties?.NonVisualDrawingProperties;
-        string id = nv?.Id?.Value.ToString() ?? Guid.NewGuid().ToString();
-
-        // Font size from first RunProperties with font size set (OpenXML stores font size as hundredths of a point)
-        double? chosenFontSizePts = null;
-        var firstRunPropsWithSize = sp.TextBody
-                                      .Descendants<A.RunProperties>()
-                                      .FirstOrDefault(rp => rp.FontSize != null);
-
-        if (firstRunPropsWithSize?.FontSize != null)
-        {
-          if (double.TryParse(firstRunPropsWithSize.FontSize.Value.ToString(), out double raw))
-          {
-            chosenFontSizePts = raw / 100.0;
-          }
-        }
-
-        // Determine whether the shape's text *starts* with bold:
-        // The first visible run of text's RunProperties.Bold.Value (if present)
-        bool startsWithBold = false;
-        var firstRunWithText = sp.TextBody
-                                .Descendants<A.Run>()
-                                .FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.Text?.Text));
-
-        var firstRunProps = GetFirstRunProperties(firstRunWithText);
-
-        if (firstRunProps != null)
-        {
-          try
-          {
-            startsWithBold = firstRunProps.Bold?.Value ?? false;
-          }
-          catch
-          {
-            startsWithBold = false;
-          }
-        }
-
-        shapeMetas.Add(new ShapeMeta
-        {
-          Id = id,
-          FullText = fullText,
-          ChosenFontSizePts = chosenFontSizePts,
-          Bold = startsWithBold
-        });
-      }
-
-      return shapeMetas;
-    }
-
-    /// <summary>
-    /// Returns the RunProperties for a Run, or null if none present.
-    /// Kept as a helper to make intent clearer and to isolate any future parsing logic.
-    /// </summary>
-    private static A.RunProperties GetFirstRunProperties(A.Run? run)
-    {
-      return run?.RunProperties;
-    }
-
-    /// <summary>
-    /// Save first slide as PNG (keeps your original Spire usage).
-    /// </summary>
-    public static void SaveFirstSlideAsPng(string pptxPath)
-    {
-      try
-      {
-        var ppt = new SpirePresentation.Presentation();
-        ppt.LoadFromFile(pptxPath);
-
-        // SaveAsImage returns a System.Drawing.Image for the first slide
-        Image img = ppt.Slides[0].SaveAsImage();
-
-        string pngPath = Path.ChangeExtension(pptxPath, ".png");
-        img.Save(pngPath);
-
-        Console.WriteLine($"Slide preview saved: {pngPath}");
-      }
-      catch (Exception ex)
-      {
-        Console.WriteLine($"PNG export failed: {ex.Message}");
-      }
-    }
-
-  }
-
-public static class OpenAiHelper
-{
-    public static async Task SendImageAndJsonToResponsesApiAsync(string imagePath, string shapesJson, string instruction, string newTextBlob)
-    {
-        var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-        if (string.IsNullOrEmpty(apiKey))
-        {
-            Console.WriteLine("OPENAI_API_KEY not set.");
-            return;
-        }
-
-        if (!File.Exists(imagePath))
-        {
-            Console.WriteLine("Image file not found: " + imagePath);
-            return;
-        }
-
-        byte[] bytes = await File.ReadAllBytesAsync(imagePath);
-        string base64 = Convert.ToBase64String(bytes);
-        string dataUri = $"data:image/png;base64,{base64}";
-
-        // Build the Responses API payload:
-        var payload = new
-        {
-            model = "gpt-5",
-            // `input` is an array of input items. We'll send a single user input that contains multiple content blocks:
-            input = new object[]
-            {
-                new
-                {
-                    role = "user",
-                    content = new object[]
-                    {
-                        new { type = "input_text", text = instruction ?? "Instruction missing" },
-                        new { type = "input_image", image_url = dataUri },
-                        new { type = "input_text", text = shapesJson },
-                        new { type = "input_text", text = newTextBlob ?? "Content blob missing" }
-                    }
-                }
-            },
-            // optional: max_output_tokens = 800
-        };
-
-        string json = JsonSerializer.Serialize(payload);
-
-        using var client = new HttpClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("SlideTemplateFiller/1.0");
-
-        try
-        {
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            using var resp = await client.PostAsync("https://api.openai.com/v1/responses", content);
-            string respBody = await resp.Content.ReadAsStringAsync();
-
-            if (!resp.IsSuccessStatusCode)
-            {
-                Console.WriteLine($"OpenAI API error {(int)resp.StatusCode}: {respBody}");
-                return;
-            }
-
-            // Try to extract the textual output robustly:
             try
             {
-                using var doc = JsonDocument.Parse(respBody);
-                var root = doc.RootElement;
-                Console.WriteLine("Im here");
+                string inputFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Template Test.pptx");
+                string outputFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "result.pptx");
 
-                // Many Responses API outputs place text in `output` → array → each item has `content` array of objects;
-                // frequently an object of type "output_text" or with property "text" holds the string.
-                if (root.TryGetProperty("output", out var output) && output.GetArrayLength() > 0)
+                if (!File.Exists(inputFile))
                 {
-                    var sb = new StringBuilder();
-                    foreach (var outItem in output.EnumerateArray())
+                    Console.WriteLine($"ERROR: '{inputFile}' not found. Place 'Template Test.pptx' next to the executable and try again.");
+                    return;
+                }
+
+
+
+                // Make a copy so we modify the copy
+                File.Copy(inputFile, outputFile, true);
+
+                // Parse JSON
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var doc = JsonSerializer.Deserialize<SlideUpdateResponse>(HardcodedJson, options);
+                if (doc?.Mappings == null || doc.Mappings.Count == 0)
+                {
+                    Console.WriteLine("No mappings found in JSON.");
+                    return;
+                }
+
+                // Open result presentation and apply mappings
+                using (PresentationDocument presentationDocument = PresentationDocument.Open(outputFile, true))
+                {
+                    var presentationPart = presentationDocument.PresentationPart;
+                    if (presentationPart == null)
                     {
-                        if (outItem.TryGetProperty("content", out var contentArr) && contentArr.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (var c in contentArr.EnumerateArray())
-                            {
-                              Console.WriteLine(c);
-                                if (c.ValueKind == JsonValueKind.Object)
-                                {
-                                    if (c.TryGetProperty("type", out var typeEl) && typeEl.GetString() == "output_text")
-                                    {
-                                        if (c.TryGetProperty("text", out var textEl))
-                                        {
-                                            sb.AppendLine(textEl.GetString());
-                                        }
-                                    }
-                                    // fallback: some schema place text under "content"->{"text": "..."} or "text"
-                                    else if (c.TryGetProperty("text", out var textEl2))
-                                    {
-                                        sb.AppendLine(textEl2.GetString());
-                                    }
-                                }
-                            }
-                        }
-                        // older/alternate field:
-                        else if (outItem.TryGetProperty("text", out var t))
-                        {
-                            sb.AppendLine(t.GetString());
-                        }
+                        Console.WriteLine("PresentationPart is null.");
+                        return;
                     }
 
-                    string finalText = sb.ToString().Trim();
-                    if (!string.IsNullOrEmpty(finalText))
+                    // Build a quick lookup of shape id -> (SlidePart, Shape)
+                    // Note: shape_id in mappings corresponds to the shape's NonVisualDrawingProperties.Id
+                    foreach (var mapping in doc.Mappings)
                     {
-                        Console.WriteLine("=== OpenAI Response (extracted) ===");
-                        Console.WriteLine(finalText);
-                        Console.WriteLine("=== End ===");
-                        return;
+                        if (!int.TryParse(mapping.Shape_Id ?? mapping.ShapeId ?? string.Empty, out int targetId))
+                        {
+                            // fallback: try to parse numeric from text
+                            Console.WriteLine($"Skipping mapping; invalid shape_id: '{mapping.Shape_Id ?? mapping.ShapeId}'");
+                            continue;
+                        }
+
+                        bool applied = false;
+
+                        foreach (var slidePart in presentationPart.SlideParts)
+                        {
+                            var shapes = slidePart.Slide.Descendants<Shape>();
+                            foreach (var shape in shapes)
+                            {
+                                var nv = shape.NonVisualShapeProperties?.NonVisualDrawingProperties;
+                                if (nv == null || !nv.Id.HasValue)
+                                    continue;
+
+                                if (nv.Id.Value == targetId)
+                                {
+                                    // Apply replacement
+                                    SetShapeText(shape, mapping.Text ?? string.Empty, mapping.Style_Suggestion);
+                                    applied = true;
+                                    break;
+                                }
+                            }
+
+                            if (applied)
+                            {
+                                // Save the slide
+                                slidePart.Slide.Save();
+                                break;
+                            }
+                        }
+
+                        if (!applied)
+                        {
+                            Console.WriteLine($"Warning: shape with id={targetId} not found in any slide.");
+                        }
                     }
                 }
 
-                // fallback: print whole response
-                Console.WriteLine("Full response JSON (could not find extracted text):");
-                Console.WriteLine(respBody);
+                Console.WriteLine($"Done. Updated presentation saved as '{outputFile}'.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Failed to parse response: " + ex.Message);
-                Console.WriteLine("Raw response:");
-                Console.WriteLine(respBody);
+                Console.WriteLine("ERROR: " + ex.ToString());
             }
         }
-        catch (Exception ex)
+
+        /// Replace the text of a Shape (text box) with new text and optionally apply style suggestions.Replaces all paragraphs with a single or multiline paragraph preserving bullet-like line breaks.
+        private static void SetShapeText(Shape shape, string newText, StyleSuggestion style)
         {
-            Console.WriteLine("HTTP error calling OpenAI: " + ex.Message);
+            if (shape == null)
+                return;
+
+            // Ensure TextBody exists
+            var textBody = shape.TextBody;
+            if (textBody == null)
+            {
+                // create a basic text body if missing
+                textBody = new TextBody(
+                    new A.BodyProperties(),
+                    new A.ListStyle(),
+                    new A.Paragraph()
+                );
+                shape.Append(textBody);
+            }
+
+            // Clear existing paragraphs
+            textBody.RemoveAllChildren<A.Paragraph>();
+
+            // If the newText contains bullet lines (• or leading "-"), keep them on separate paragraphs.
+            string[] lines = newText.Replace("\r\n", "\n").Split('\n');
+
+            foreach (var rawLine in lines)
+            {
+                string line = rawLine ?? string.Empty;
+
+                var paragraph = new A.Paragraph();
+
+                // Basic paragraph properties: if line starts with "•" keep it as bullet.
+                if (line.TrimStart().StartsWith("•"))
+                {
+                    // set a basic bullet by setting a paragraph level property
+                    paragraph.ParagraphProperties = new A.ParagraphProperties() { Level = 0 };
+                    // remove leading bullet symbol for text content (we keep the bullet glyph visually)
+                    line = line.Trim();
+                }
+
+                var run = new A.Run();
+                var runProperties = new A.RunProperties();
+
+                // Apply style if provided
+                if (style != null)
+                {
+                    if (style.Font_Size.HasValue)
+                    {
+                        // OpenXML FontSize is specified in 100ths of a point
+                        runProperties.FontSize = style.Font_Size.Value * 100;
+                    }
+
+                    if (style.Bold.HasValue && style.Bold.Value)
+                    {
+                        runProperties.Bold = true;
+                    }
+                }
+
+                // Attach run properties only if any property set; otherwise RunProperties may be empty but it's ok.
+                if (runProperties.HasChildren || runProperties.FontSize != null || runProperties.Bold != null)
+                {
+                    run.Append(runProperties);
+                }
+
+                run.Append(new A.Text(line ?? string.Empty));
+                paragraph.Append(run);
+                textBody.Append(paragraph);
+            }
+
+            // If the shape had a placeholder-type drawing properties, preserve them.
+        }
+
+        private class SlideUpdateResponse
+        {
+            public List<ShapeMapping> Mappings { get; set; }
+            public FallbackInfo Fallback { get; set; }
+        }
+
+        private class ShapeMapping
+        {
+            // Accept both "shape_id" and "shapeId"
+            public string Shape_Id { get; set; }
+            // helper property for lenient parsing:
+            public string ShapeId { get => Shape_Id; set => Shape_Id = value; }
+            public string Text { get; set; }
+            public StyleSuggestion Style_Suggestion { get; set; }
+            public string Reason { get; set; }
+        }
+
+        private class StyleSuggestion
+        {
+            public int? Font_Size { get; set; }
+            public bool? Bold { get; set; }
+
+            // lenient property names
+            public int? FontSize { get => Font_Size; set => Font_Size = value; }
+        }
+
+        private class FallbackInfo
+        {
+            public string Action { get; set; }
+            public string Explanation { get; set; }
         }
     }
-}
-
-  class ExtractionResult
-  {
-    public int ShapeCount { get; set; }
-    public List<ShapeMeta> Shapes { get; set; } = new();
-  }
-
-  class ShapeMeta
-  {
-    public string Id { get; set; } = "";
-    public string FullText { get; set; } = "";
-    public double? ChosenFontSizePts { get; set; }
-
-    // true when the first visible run of text in the shape is bold.
-    public bool Bold { get; set; } = false;
-  }
 }
