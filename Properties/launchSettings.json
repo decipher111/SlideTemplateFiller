@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "SlideTemplateFiller_Project": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7226",
+      "launchBrowser": false
+    }
+  }
+}
