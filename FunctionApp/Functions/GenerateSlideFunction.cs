@@ -47,16 +47,19 @@ namespace SlideTemplateFiller.Functions
 
             // read request JSON
             var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            var requestJson = string.IsNullOrWhiteSpace(requestBody)
-                ? new JsonElement()
-                : JsonSerializer.Deserialize<JsonElement>(requestBody);
+            JsonElement? requestJson = null;
+            if (!string.IsNullOrWhiteSpace(requestBody))
+            {
+                requestJson = JsonSerializer.Deserialize<JsonElement>(requestBody);
+            }
 
             // optional: caller can specify template name (defaults to "template.pptx")
             string templateBlobName = "template.pptx";
             try
             {
-                if (requestJson.ValueKind == JsonValueKind.Object &&
-                    requestJson.TryGetProperty("templateName", out var tnameEl) &&
+                if (requestJson.HasValue &&
+                    requestJson.Value.ValueKind == JsonValueKind.Object &&
+                    requestJson.Value.TryGetProperty("templateName", out var tnameEl) &&
                     tnameEl.ValueKind == JsonValueKind.String &&
                     !string.IsNullOrWhiteSpace(tnameEl.GetString()))
                 {
@@ -81,6 +84,11 @@ namespace SlideTemplateFiller.Functions
                 // Download template from templates container into localTemplatePath
                 await _blobHelper.DownloadBlobToFileAsync(_templateContainer, templateBlobName, localTemplatePath);
 
+                // --- Extract shape metadata from the template using your existing logic (or ShapeExtractor) ---
+                logger.LogInformation("Extracting shape metadata from template...");
+                string shapesJson = ShapeExtractor.ExtractShapesJson(localTemplatePath);
+                logger.LogWarning("Shapes JSON (first 1k chars): {s}", shapesJson.Length > 1000 ? shapesJson.Substring(0,1000) + "..." : shapesJson);
+
                 // --- Generate PNG preview of first slide using Spire (or your existing logic) ---
                 logger.LogInformation("Creating PNG preview from template (local): {path}", localPngPath);
                 // IMPORTANT: Replace SaveFirstSlideAsPng below with your exact current method if needed.
@@ -95,9 +103,12 @@ namespace SlideTemplateFiller.Functions
                 logger.LogInformation("Preview uploaded. SAS: {sas}", previewSas);
 
                 // --- Call OpenAI (or your existing OpenAI wrapper) using the previewSas URL ---
+                var newTextBlob = requestJson.HasValue && requestJson.Value.TryGetProperty("newTextBlob", out var nt) ? (nt.ValueKind == JsonValueKind.String ? nt.GetString() : null) : null;
+                newTextBlob ??= Environment.GetEnvironmentVariable("DEFAULT_NEW_TEXT") ?? "Put your default content here";
+
                 logger.LogInformation("Calling OpenAI with preview URL for mapping...");
-                var openAiResult = await OpenAiHelper.CallOpenAiForMappingsAsync(previewSas.ToString(), _openAiKey, logger);
-                // openAiResult should contain mapping instructions your SlideWriter can consume
+                var openAiResult = await OpenAiHelper.CallOpenAiForMappingsAsync(previewSas.ToString(), shapesJson, newTextBlob, _openAiKey, logger);
+                logger.LogWarning("OpenAI extracted text (first 2k chars): {t}", openAiResult?.Length > 2000 ? openAiResult.Substring(0,2000) + "..." : openAiResult);
                 // (This helper is a small wrapper - replace with your exact OpenAI logic if you have one.)
 
                 // --- Apply mappings to template to generate final PPTX ---
@@ -105,7 +116,8 @@ namespace SlideTemplateFiller.Functions
                 // TODO: Replace this with your actual slide-mapping implementation.
                 // For now we copy the template to output (so functi    on produces an output PPT).
                 // SlideProcessor.ApplyMappings(localTemplatePath, localOutputPath, openAiResult);
-                File.Copy(localTemplatePath, localOutputPath, overwrite: true);
+                await SlideProcessor.ProcessPresentationAsync(localTemplatePath, localOutputPath, openAiResult, logger);
+                // File.Copy(localTemplatePath, localOutputPath, overwrite: true);
 
                 // --- Upload the final PPT to output container ---
                 logger.LogInformation("Uploading final PPT to blob container: {container}", _outputContainer);
