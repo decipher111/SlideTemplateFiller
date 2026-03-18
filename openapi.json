@@ -1,0 +1,64 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Slide Template Filler",
+    "description": "Generates a filled PowerPoint from a template using AI",
+    "version": "1.0"
+  },
+  "host": "slidefiller-hcendgbchndra2ec.eastus2-01.azurewebsites.net",
+  "basePath": "/api",
+  "schemes": ["https"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "paths": {
+    "/GenerateSlide": {
+      "post": {
+        "summary": "Generate Slide",
+        "description": "Fills a PowerPoint template with new content using AI",
+        "operationId": "GenerateSlide",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "templateName": {
+                  "type": "string",
+                  "description": "Blob name of the template (default: template.pptx)",
+                  "x-ms-summary": "Template Name"
+                },
+                "newTextBlob": {
+                  "type": "string",
+                  "description": "The new content to populate into the slides",
+                  "x-ms-summary": "New Content"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string" },
+                "fileName": { "type": "string" },
+                "downloadUrl": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "securityDefinitions": {
+    "api_key": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "x-functions-key"
+    }
+  }
+}

@@ -24,7 +24,7 @@ namespace SlideTemplateFiller.Functions.Helpers
 
             var payload = new
             {
-                model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-5",
+                model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4o",
                 input = new object[]
                 {
                     new
