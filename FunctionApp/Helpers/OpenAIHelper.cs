@@ -19,12 +19,12 @@ namespace SlideTemplateFiller.Functions.Helpers
                 return null;
             }
 
-            using var http = new HttpClient();
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(300) };
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
             var payload = new
             {
-                model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4o",
+                model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-5",
                 input = new object[]
                 {
                     new

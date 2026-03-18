@@ -141,9 +141,10 @@ namespace SlideTemplateFiller.Functions
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error in GenerateSlide function.");
+                logger.LogError(ex, "FULL ERROR");
+
                 var resp = req.CreateResponse(System.Net.HttpStatusCode.InternalServerError);
-                await resp.WriteStringAsync(JsonSerializer.Serialize(new { status = "error", message = ex.Message }));
+                await resp.WriteStringAsync(ex.ToString());   // <-- IMPORTANT change
                 return resp;
             }
             finally
